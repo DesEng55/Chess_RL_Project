@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess RL Multi-Agent Visualizer</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.connected {
+            background: #48bb78;
+            color: white;
+        }
+
+        .connection-status.disconnected {
+            background: #f56565;
+            color: white;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .chess-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .player-info.active {
+            border-color: #4299e1;
+            background: #ebf8ff;
+            box-shadow: 0 0 20px rgba(66, 153, 225, 0.3);
+        }
+
+        .player-info h3 {
+            font-size: 1.2em;
+            color: #2d3748;
+        }
+
+        .player-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 0.8em;
+        }
+
+        .stat-value {
+            color: #2d3748;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .board-container {
+            position: relative;
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1;
+            margin: 0 auto;
+            border: 3px solid #2d3748;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .square.light {
+            background: #f0d9b5;
+        }
+
+        .square.dark {
+            background: #b58863;
+        }
+
+        .square.last-move {
+            background: #cdd26a !important;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(66, 153, 225, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(72, 187, 120, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(245, 101, 101, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .panel h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+            font-size: 1.3em;
+            border-bottom: 2px solid #cbd5e0;
+            padding-bottom: 10px;
+        }
+
+        .move-history {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        .move-entry {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 3px solid #4299e1;
+            display: flex;
+            justify-content: space-between;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .move-number {
+            color: #718096;
+            font-weight: bold;
+        }
+
+        .training-status {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+        }
+
+        .status-label {
+            color: #718096;
+        }
+
+        .status-value {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4299e1 0%, #3182ce 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .agent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .agent-card {
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .agent-card:hover {
+            border-color: #4299e1;
+            box-shadow: 0 4px 12px rgba(66, 153, 225, 0.2);
+        }
+
+        .agent-card.active {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+
+        .agent-name {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .agent-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.85em;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .metric-label {
+            color: #718096;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .log-output {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1a202c;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            margin: 3px 0;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="connection-status disconnected" id="connectionStatus">
+                <div class="status-dot"></div>
+                <span>Disconnected</span>
+            </div>
+            <h1>🤖 Multi-Agent Chess RL Visualizer</h1>
+            <p>Watch AI agents learn and compete in real-time</p>
+        </div>
+
+        <div class="main-content">
+            <div class="chess-section">
+                <div class="player-info" id="whitePlayer">
+                    <div>
+                        <h3>⚪ White Agent</h3>
+                        <p style="color: #718096; font-size: 0.9em;" id="whiteAgentName">Agent 0</p>
+                    </div>
+                    <div class="player-stats">
+                        <div class="stat">
+                            <span class="stat-label">ELO</span>
+                            <span class="stat-value" id="whiteElo">1500</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Wins</span>
+                            <span class="stat-value" id="whiteWins">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="board-container">
+                    <div id="chessboard"></div>
+                </div>
+
+                <div class="player-info" id="blackPlayer">
+                    <div>
+                        <h3>⚫ Black Agent</h3>
+                        <p style="color: #718096; font-size: 0.9em;" id="blackAgentName">Agent 1</p>
+                    </div>
+                    <div class="player-stats">
+                        <div class="stat">
+                            <span class="stat-label">ELO</span>
+                            <span class="stat-value" id="blackElo">1500</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Wins</span>
+                            <span class="stat-value" id="blackWins">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn-primary" onclick="startTraining()" id="trainBtn">🚀 Start Training</button>
+                    <button class="btn-secondary" onclick="playMatch()" id="matchBtn">▶️ Play Match</button>
+                    <button class="btn-danger" onclick="resetSystem()">🔄 Reset</button>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <h3>📊 Training Status</h3>
+                    <div class="training-status">
+                        <div class="status-item">
+                            <span class="status-label">Current Match:</span>
+                            <span class="status-value" id="currentMatch">-</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Total Matches:</span>
+                            <span class="status-value" id="totalMatches">0</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Current Move:</span>
+                            <span class="status-value" id="currentMove">-</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 0%">0%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>📝 Move History</h3>
+                    <div class="move-history" id="moveHistory">
+                        <p style="color: #718096; text-align: center; padding: 20px;">No moves yet</p>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>🤖 Active Agents</h3>
+                    <div class="agent-list" id="agentList"></div>
+                </div>
+
+                <div class="panel">
+                    <h3>📟 System Log</h3>
+                    <div class="log-output" id="logOutput">
+                        <div class="log-entry">> System initialized...</div>
+                        <div class="log-entry">> Connecting to backend...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+        let socket = null;
+        let currentMatchNum = 0;
+        let totalMatchesInSession = 0;
+        let moveCount = 0;
+        let currentWhiteAgent = 0;
+        let currentBlackAgent = 1;
+        let agents = [];
+
+        // Chess piece Unicode
+        const pieces = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+        };
+
+        // Initialize WebSocket connection
+        function connectWebSocket() {
+            socket = io(API_URL);
+
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+                addLog('✅ Connected to backend server');
+                socket.emit('request_agents');
+            });
+
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                addLog('❌ Disconnected from server');
+            });
+
+            socket.on('board_update', (data) => {
+                renderBoardFromFEN(data.fen);
+                currentWhiteAgent = data.white_agent;
+                currentBlackAgent = data.black_agent;
+                updatePlayerInfo();
+                moveCount = 0;
+                clearMoveHistory();
+                addLog(`🎮 New game: Agent ${data.white_agent} (White) vs Agent ${data.black_agent} (Black)`);
+            });
+
+            socket.on('move_made', (data) => {
+                renderBoardFromFEN(data.fen);
+                moveCount = data.move_number;
+                addMoveToHistory(data.move_san, data.move_number, data.evaluation);
+                updatePlayerTurn(data.current_turn);
+                document.getElementById('currentMove').textContent = data.move_san;
+            });
+
+            socket.on('match_complete', (data) => {
+                let resultText = data.winner === 'draw' ? 'Draw' : `${data.winner} wins`;
+                addLog(`🏁 Match complete: ${resultText} (${data.total_moves} moves)`);
+                updateAgentElo(data.white_agent, data.white_elo, data.black_agent, data.black_elo);
+                currentMatchNum++;
+                updateProgress();
+            });
+
+            socket.on('agents_update', (data) => {
+                agents = data.agents;
+                updateAgentList();
+            });
+
+            socket.on('training_started', (data) => {
+                totalMatchesInSession = data.num_matches;
+                currentMatchNum = 0;
+                addLog(`🚀 Training started: ${data.num_matches} matches`);
+                document.getElementById('trainBtn').disabled = true;
+                document.getElementById('matchBtn').disabled = true;
+            });
+
+            socket.on('match_starting', (data) => {
+                addLog(`⚔️ Match ${data.match_number}/${data.total_matches} starting...`);
+                document.getElementById('currentMatch').textContent = `${data.match_number}/${data.total_matches}`;
+            });
+
+            socket.on('training_complete', () => {
+                addLog('✨ Training session complete!');
+                document.getElementById('trainBtn').disabled = false;
+                document.getElementById('matchBtn').disabled = false;
+            });
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.className = 'connection-status connected';
+                statusEl.innerHTML = '<div class="status-dot"></div><span>Connected</span>';
+            } else {
+                statusEl.className = 'connection-status disconnected';
+                statusEl.innerHTML = '<div class="status-dot"></div><span>Disconnected</span>';
+            }
+        }
+
+        function renderBoardFromFEN(fen) {
+            const boardEl = document.getElementById('chessboard');
+            boardEl.innerHTML = '';
+
+            const position = fen.split(' ')[0];
+            const rows = position.split('/');
+
+            for (let row = 0; row < 8; row++) {
+                let col = 0;
+                for (let char of rows[row]) {
+                    if (isNaN(char)) {
+                        const square = document.createElement('div');
+                        square.className = 'square ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+                        square.textContent = pieces[char] || '';
+                        boardEl.appendChild(square);
+                        col++;
+                    } else {
+                        for (let i = 0; i < parseInt(char); i++) {
+                            const square = document.createElement('div');
+                            square.className = 'square ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+                            boardEl.appendChild(square);
+                            col++;
+                        }
+                    }
+                }
+            }
+        }
+
+        function addMoveToHistory(move, moveNum, evaluation) {
+            const historyEl = document.getElementById('moveHistory');
+            
+            if (historyEl.firstChild && historyEl.firstChild.tagName === 'P') {
+                historyEl.innerHTML = '';
+            }
+
+            const entry = document.createElement('div');
+            entry.className = 'move-entry';
+            const isWhite = moveNum % 2 === 1;
+            const displayNum = Math.ceil(moveNum / 2);
+            
+            entry.innerHTML = `
+                <span class="move-number">${displayNum}${isWhite ? '.' : '...'}</span>
+                <span>${move}</span>
+                <span style="color: ${evaluation > 0 ? '#48bb78' : '#f56565'}; font-size: 0.9em;">
+                    ${evaluation > 0 ? '+' : ''}${evaluation.toFixed(2)}
+                </span>
+            `;
+            
+            historyEl.appendChild(entry);
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        function clearMoveHistory() {
+            const historyEl = document.getElementById('moveHistory');
+            historyEl.innerHTML = '<p style="color: #718096; text-align: center; padding: 20px;">Game in progress...</p>';
+        }
+
+        function updatePlayerTurn(turn) {
+            const whiteEl = document.getElementById('whitePlayer');
+            const blackEl = document.getElementById('blackPlayer');
+            
+            if (turn === 'white') {
+                whiteEl.classList.add('active');
+                blackEl.classList.remove('active');
+            } else {
+                blackEl.classList.add('active');
+                whiteEl.classList.remove('active');
+            }
+        }
+
+        function updatePlayerInfo() {
+            document.getElementById('whiteAgentName').textContent = `Agent ${currentWhiteAgent}`;
+            document.getElementById('blackAgentName').textContent = `Agent ${currentBlackAgent}`;
+        }
+
+        function updateAgentElo(whiteId, whiteElo, blackId, blackElo) {
+            if (agents[whiteId]) {
+                agents[whiteId].elo = whiteElo;
+            }
+            if (agents[blackId]) {
+                agents[blackId].elo = blackElo;
+            }
+            
+            if (whiteId === currentWhiteAgent) {
+                document.getElementById('whiteElo').textContent = Math.round(whiteElo);
+            }
+            if (blackId === currentBlackAgent) {
+                document.getElementById('blackElo').textContent = Math.round(blackElo);
+            }
+        }
+
+        function updateAgentList() {
+            const listEl = document.getElementById('agentList');
+            listEl.innerHTML = '';
+
+            agents.forEach(agent => {
+                const isPlaying = agent.id === currentWhiteAgent || agent.id === currentBlackAgent;
+                const card = document.createElement('div');
+                card.className = 'agent-card' + (isPlaying ? ' active' : '');
+                
+                const winRate = agent.games_played > 0 
+                    ? Math.round((agent.wins / agent.games_played) * 100) 
+                    : 0;
+                
+                card.innerHTML = `
+                    <div class="agent-name">
+                        Agent ${agent.id}
+                        ${agent.id === currentWhiteAgent ? '⚪' : ''}
+                        ${agent.id === currentBlackAgent ? '⚫' : ''}
+                    </div>
+                    <div class="agent-metrics">
+                        <div class="metric">
+                            <span class="metric-label">ELO:</span>
+                            <span class="metric-value">${Math.round(agent.elo)}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Games:</span>
+                            <span class="metric-value">${agent.games_played}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">W/L/D:</span>
+                            <span class="metric-value">${agent.wins}/${agent.losses}/${agent.draws}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Win Rate:</span>
+                            <span class="metric-value">${winRate}%</span>
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+
+            // Update current player stats
+            const whiteAgent = agents.find(a => a.id === currentWhiteAgent);
+            const blackAgent = agents.find(a => a.id === currentBlackAgent);
+            
+            if (whiteAgent) {
+                document.getElementById('whiteElo').textContent = Math.round(whiteAgent.elo);
+                document.getElementById('whiteWins').textContent = whiteAgent.wins;
+            }
+            if (blackAgent) {
+                document.getElementById('blackElo').textContent = Math.round(blackAgent.elo);
+                document.getElementById('blackWins').textContent = blackAgent.wins;
+            }
+        }
+
+        function updateProgress() {
+            if (totalMatchesInSession > 0) {
+                const percent = Math.round((currentMatchNum / totalMatchesInSession) * 100);
+                const fillEl = document.getElementById('progressFill');
+                fillEl.style.width = percent + '%';
+                fillEl.textContent = percent + '%';
+                document.getElementById('totalMatches').textContent = totalMatchesInSession;
+            }
+        }
+
+        function addLog(message) {
+            const logEl = document.getElementById('logOutput');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+
+            while (logEl.children.length > 50) {
+                logEl.removeChild(logEl.firstChild);
+            }
+        }
+
+        async function startTraining() {
+            try {
+                const response = await fetch(`${API_URL}/api/start-training`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ num_matches: 10 })
+                });
+                const data = await response.json();
+                addLog(`Training started: ${data.num_matches} matches`);
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`);
+            }
+        }
+
+        async function playMatch() {
+            try {
+                const response = await fetch(`${API_URL}/api/play-match`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                addLog(`Single match started`);
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`);
+            }
+        }
+
+        async function resetSystem() {
+            try {
+                const response = await fetch(`${API_URL}/api/reset`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                addLog('✨ System reset');
+                currentMatchNum = 0;
+                totalMatchesInSession = 0;
+                socket.emit('request_agents');
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            connectWebSocket();
+            renderBoardFromFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+        });
+    </script>
+</body>
+</html>
