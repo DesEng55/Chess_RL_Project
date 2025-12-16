@@ -543,30 +543,6 @@ Contributions are welcome! Here are some ways to contribute:
 6. Push: `git push origin feature-name`
 7. Open a Pull Request
 
-## 📄 License
-
-This project is open source and available under the MIT License.
-
-## 🙏 Acknowledgments
-
-- **python-chess**: Excellent chess library by Niklas Fiekas
-- **PyTorch**: Deep learning framework
-- **Flask-SocketIO**: Real-time WebSocket communication
-- **Chess.com**: Inspiration for board design
-- **AlphaZero**: Inspiration for self-play training methodology
-
-## 📞 Support
-
-Having issues? Here's how to get help:
-
-1. **Check Troubleshooting**: Review the troubleshooting section above
-2. **Read Documentation**: Check this README thoroughly
-3. **Search Issues**: Look for similar problems in GitHub issues
-4. **Open Issue**: Create a new issue with:
-   - Detailed description
-   - Steps to reproduce
-   - Error messages
-   - System information (OS, Python version)
 
 ## 🎯 Project Roadmap
 
